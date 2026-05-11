@@ -236,10 +236,30 @@ cd fault-injection
 chmod +x *.sh
 ```
 
+### Lab 0 (Optional): Enable Auto-Investigation
+
+Run this once to enable fully automated investigations. When you inject faults in Lab 1-5, CloudWatch Alarms will automatically trigger DevOps Agent investigations — no manual intervention needed. Results are sent to Feishu automatically.
+
+```bash
+# Enable (creates CloudWatch Alarms + Lambda + EventBridge rule)
+./lab0-enable-auto-investigation.sh
+
+# Disable when done
+./lab0-disable-auto-investigation.sh
+```
+
+**With Lab 0 enabled, the flow becomes:**
+```
+Inject Fault → CloudWatch Alarm → Lambda → DevOps Agent (auto)
+                                              → Investigation Completed
+                                              → Feishu notification
+```
+
 ### Quick Reference
 
 | Lab | Inject | Fix | Impact |
 |-----|--------|-----|--------|
+| 0. Auto-Investigation | `./lab0-enable-auto-investigation.sh` | `./lab0-disable-auto-investigation.sh` | Enables auto-trigger |
 | 1. Catalog Latency | `./inject-catalog-latency.sh` | `./rollback-catalog.sh` | Slow product pages |
 | 2. Cart Memory Leak | `./inject-cart-memory-leak.sh` | `./rollback-cart-memory-leak.sh` | Cart service crashes |
 | 3. RDS Security Group | `./inject-rds-sg-block.sh` | `./rollback-rds-sg-block.sh` | Database unreachable |
