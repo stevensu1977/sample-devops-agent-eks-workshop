@@ -719,22 +719,22 @@ terraform destroy
 
 ## Feishu (飞书) Integration
 
-Integrate DevOps Agent with Feishu for automated notifications and interactive troubleshooting directly in your team chat.
+Integrate DevOps Agent with Feishu for interactive troubleshooting directly in your team chat via WebSocket long-connection.
 
 **Features:**
-- Auto-investigation triggered by CloudWatch Alarms, results pushed to Feishu group
 - @Bot interactive chat with DevOps Agent Chat API for real-time troubleshooting
 - Multi-turn conversation support with session management
+- WebSocket mode (EKS Pod connects to Feishu) — no public endpoint needed
 
 ```bash
-# Deploy the integration (after EKS environment is ready)
+# Deploy the bot to EKS (after EKS environment is ready)
 export DEVOPS_AGENT_SPACE_ID="<your-agent-space-id>"
 export FEISHU_APP_ID="<your-feishu-app-id>"
 export FEISHU_APP_SECRET="<your-feishu-app-secret>"
 export FEISHU_CHAT_ID="<your-feishu-chat-id>"
 
 cd feishu-integration
-./deploy.sh
+./deploy-k8s-bot.sh
 ```
 
 See [feishu-integration/README.md](feishu-integration/README.md) for full setup instructions.
