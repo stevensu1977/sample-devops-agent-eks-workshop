@@ -123,11 +123,28 @@ def _handle_message_inner(event: P2ImMessageReceiveV1) -> None:
         logger.error(f"DevOps Agent error: {type(e).__name__}: {e}", exc_info=True)
         agent_response = f"调查请求处理失败: {str(e)}\n\n请稍后重试，或发送 /reset 重置会话。"
 
-    if len(agent_response) > 4000:
-        agent_response = agent_response[:4000] + "\n\n... (回复过长已截断)"
-
+    # Split long responses into multiple messages (Feishu limit ~30000 chars per msg)
+    MAX_LEN = 28000
     try:
-        reply_text(message_id, agent_response)
+        if len(agent_response) <= MAX_LEN:
+            reply_text(message_id, agent_response)
+        else:
+            # Split into chunks
+            chunks = []
+            while agent_response:
+                if len(agent_response) <= MAX_LEN:
+                    chunks.append(agent_response)
+                    break
+                # Find a good split point (newline)
+                split_at = agent_response.rfind("\n", 0, MAX_LEN)
+                if split_at < MAX_LEN // 2:
+                    split_at = MAX_LEN
+                chunks.append(agent_response[:split_at])
+                agent_response = agent_response[split_at:].lstrip("\n")
+
+            for i, chunk in enumerate(chunks):
+                header = f"[{i+1}/{len(chunks)}]\n" if len(chunks) > 1 else ""
+                reply_text(message_id, header + chunk)
         logger.info(f"Reply sent to message_id={message_id}")
     except Exception as e:
         logger.error(f"Reply failed: {type(e).__name__}: {e}", exc_info=True)

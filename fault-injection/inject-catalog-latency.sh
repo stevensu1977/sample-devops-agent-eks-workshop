@@ -6,7 +6,8 @@ set -e
 
 NAMESPACE="catalog"
 DEPLOYMENT="catalog"
-BACKUP_FILE="~/fault-injection/catalog-original.yaml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_FILE="$SCRIPT_DIR/catalog-original.yaml"
 
 echo "=== Catalog Service Fault Injection (Network + CPU Stress) ==="
 echo "Target: $DEPLOYMENT in namespace $NAMESPACE"
@@ -131,7 +132,6 @@ echo "  - CPU stress: 8 workers at 100% load with 4000m limit (EXTREME)"
 echo "  - Expected: HPA will scale to max (10 pods), all at high CPU"
 
 # Source verification functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/verify-functions.sh" 2>/dev/null || true
 
 # Step 5: Check pod status
@@ -174,4 +174,4 @@ echo "Check latency + stress injector logs:"
 echo "  kubectl logs -n $NAMESPACE -l app.kubernetes.io/name=catalog -c latency-injector --tail=10"
 echo ""
 echo "Rollback:"
-echo "  ./~/fault-injection/rollback-catalog.sh"
+echo "  ./rollback-catalog.sh"
