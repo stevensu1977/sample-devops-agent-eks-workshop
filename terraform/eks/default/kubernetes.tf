@@ -278,6 +278,7 @@ resource "helm_release" "ui" {
       istio_enabled                  = var.istio_enabled
       alb_logs_bucket                = aws_s3_bucket.alb_logs.id
       cluster_name                   = local.cluster_name
+      alb_security_group_id          = aws_security_group.alb_cloudfront.id
     })
   ]
 }

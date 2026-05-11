@@ -49,23 +49,39 @@ if [ "$VPC_ID" != "None" ] && [ "$VPC_ID" != "null" ] && [ -n "$VPC_ID" ]; then
     done
 fi
 
-# Step 3: Run Terraform destroy (remove Kubernetes resources from state first to avoid provider issues)
+# Step 3: Wait for RDS instances that are still creating/modifying
 echo ""
-echo "=== Step 3: Removing Kubernetes resources from Terraform state ==="
+echo "=== Step 3: Waiting for RDS instances to become available ==="
+for DB_INSTANCE in "${CLUSTER_NAME}-catalog-one" "${CLUSTER_NAME}-orders-one"; do
+    DB_STATUS=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE" --query "DBInstances[0].DBInstanceStatus" --output text --region $REGION 2>/dev/null || echo "not-found")
+    if [ "$DB_STATUS" = "creating" ] || [ "$DB_STATUS" = "modifying" ] || [ "$DB_STATUS" = "backing-up" ]; then
+        echo "  $DB_INSTANCE is '$DB_STATUS', waiting for it to become available..."
+        aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE" --region $REGION 2>/dev/null || true
+        echo "  $DB_INSTANCE is now available"
+    elif [ "$DB_STATUS" = "not-found" ]; then
+        echo "  $DB_INSTANCE not found (already deleted or never created)"
+    else
+        echo "  $DB_INSTANCE status: $DB_STATUS"
+    fi
+done
+
+# Step 4: Run Terraform destroy (remove Kubernetes resources from state first to avoid provider issues)
+echo ""
+echo "=== Step 4: Removing Kubernetes resources from Terraform state ==="
 cd $TERRAFORM_DIR
 terraform state rm 'kubernetes_config_map_v1_data.aws_auth' 2>/dev/null || true
 terraform state rm 'helm_release.ui' 'helm_release.catalog' 'helm_release.carts' 'helm_release.orders' 'helm_release.checkout' 2>/dev/null || true
 terraform state rm 'kubernetes_namespace.ui' 'kubernetes_namespace.catalog' 'kubernetes_namespace.carts' 'kubernetes_namespace.orders' 'kubernetes_namespace.checkout' 'kubernetes_namespace.rabbitmq' 2>/dev/null || true
 
 echo ""
-echo "=== Step 4: Running Terraform destroy ==="
+echo "=== Step 5: Running Terraform destroy ==="
 terraform destroy -auto-approve || true
 cd - > /dev/null
 
-# Step 5: Final VPC cleanup if it still exists
+# Step 6: Final VPC cleanup if it still exists
 if [ "$VPC_ID" != "None" ] && [ "$VPC_ID" != "null" ] && [ -n "$VPC_ID" ]; then
     echo ""
-    echo "=== Step 5: Final VPC cleanup ==="
+    echo "=== Step 6: Final VPC cleanup ==="
     
     # Check if VPC still exists
     VPC_EXISTS=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[0].VpcId" --output text --region $REGION 2>/dev/null || echo "None")
@@ -130,9 +146,9 @@ if [ "$VPC_ID" != "None" ] && [ "$VPC_ID" != "null" ] && [ -n "$VPC_ID" ]; then
     fi
 fi
 
-# Step 6: Clean up CloudWatch log groups created by Container Insights
+# Step 7: Clean up CloudWatch log groups created by Container Insights
 echo ""
-echo "=== Step 6: Cleaning up CloudWatch log groups ==="
+echo "=== Step 7: Cleaning up CloudWatch log groups ==="
 LOG_GROUPS=$(aws logs describe-log-groups --log-group-name-prefix "/aws/containerinsights/$CLUSTER_NAME" --query "logGroups[*].logGroupName" --output text --region $REGION 2>/dev/null || echo "")
 for lg in $LOG_GROUPS; do
     echo "Deleting log group: $lg"
@@ -152,6 +168,38 @@ for lg in $LOG_GROUPS; do
     echo "Deleting log group: $lg"
     aws logs delete-log-group --log-group-name "$lg" --region $REGION 2>/dev/null || true
 done
+
+# Step 8: Clean up DevOps Agent Space and IAM Role
+echo ""
+echo "=== Step 8: Cleaning up DevOps Agent resources ==="
+
+AGENT_SPACE_NAME="${CLUSTER_NAME}-workshop"
+AGENT_ROLE_NAME="DevOpsAgentRole-${CLUSTER_NAME}"
+
+# Delete Agent Space
+AGENT_SPACE_ID=$(aws devops-agent list-agent-spaces --region "$REGION" \
+    --query "agentSpaces[?name=='${AGENT_SPACE_NAME}'].agentSpaceId" \
+    --output text 2>/dev/null || echo "")
+
+if [ -n "$AGENT_SPACE_ID" ] && [ "$AGENT_SPACE_ID" != "None" ]; then
+    echo "Deleting Agent Space: $AGENT_SPACE_ID"
+    aws devops-agent delete-agent-space --agent-space-id "$AGENT_SPACE_ID" --region "$REGION" 2>/dev/null || true
+fi
+
+# Delete IAM Role
+if aws iam get-role --role-name "$AGENT_ROLE_NAME" &>/dev/null; then
+    echo "Deleting IAM Role: $AGENT_ROLE_NAME"
+    # Detach managed policies
+    for policy_arn in $(aws iam list-attached-role-policies --role-name "$AGENT_ROLE_NAME" --query "AttachedPolicies[*].PolicyArn" --output text 2>/dev/null); do
+        aws iam detach-role-policy --role-name "$AGENT_ROLE_NAME" --policy-arn "$policy_arn" 2>/dev/null || true
+    done
+    # Delete inline policies
+    for policy_name in $(aws iam list-role-policies --role-name "$AGENT_ROLE_NAME" --query "PolicyNames[*]" --output text 2>/dev/null); do
+        aws iam delete-role-policy --role-name "$AGENT_ROLE_NAME" --policy-name "$policy_name" 2>/dev/null || true
+    done
+    aws iam delete-role --role-name "$AGENT_ROLE_NAME" 2>/dev/null || true
+fi
+echo "  Done"
 
 echo ""
 echo "=== Environment destroyed successfully ==="

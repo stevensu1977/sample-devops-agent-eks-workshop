@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: feishu-bot
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feishu-bot-config
+  namespace: feishu-bot
+data:
+  DEVOPS_AGENT_SPACE_ID: "__DEVOPS_AGENT_SPACE_ID__"
+  DEPLOY_REGION: "__REGION__"
+  FEISHU_APP_ID: "__FEISHU_APP_ID__"
+  FEISHU_CHAT_ID: "__FEISHU_CHAT_ID__"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: feishu-bot-secret
+  namespace: feishu-bot
+type: Opaque
+stringData:
+  FEISHU_APP_SECRET: "__FEISHU_APP_SECRET__"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feishu-bot
+  namespace: feishu-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feishu-bot
+  template:
+    metadata:
+      labels:
+        app: feishu-bot
+    spec:
+      serviceAccountName: feishu-bot
+      containers:
+      - name: feishu-bot
+        image: python:3.12-slim
+        command: ["python3", "/app/bot.py"]
+        envFrom:
+        - configMapRef:
+            name: feishu-bot-config
+        - secretRef:
+            name: feishu-bot-secret
+        volumeMounts:
+        - name: bot-code
+          mountPath: /app
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      volumes:
+      - name: bot-code
+        configMap:
+          name: feishu-bot-code
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: feishu-bot
+  namespace: feishu-bot
+  annotations:
+    eks.amazonaws.com/role-arn: "__ROLE_ARN__"

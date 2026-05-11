@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DevOpsAgentInvestigation",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:CreateBacklogTask",
+        "aidevops:ListJournalRecords"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DevOpsAgentChat",
+      "Effect": "Allow",
+      "Action": [
+        "aidevops:CreateChat",
+        "aidevops:SendMessage"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

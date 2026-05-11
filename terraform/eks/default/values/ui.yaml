@@ -34,7 +34,8 @@ istio:
   hosts:
   - "*"
 %{ else }
-# Use Ingress with AWS ALB for public access
+# Use Ingress with AWS ALB behind CloudFront
+# ALB listens on port 8999 (not 80), restricted to CloudFront prefix list only
 service:
   type: ClusterIP
 
@@ -49,7 +50,12 @@ ingress:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
-    alb.ingress.kubernetes.io/tags: eks:eks-cluster-name=retail-store
+    alb.ingress.kubernetes.io/tags: eks:eks-cluster-name=${cluster_name}
+    # Listen on port 8999 instead of 80 (security requirement)
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 8999}]'
+    # Restrict ALB to CloudFront-only security group
+    alb.ingress.kubernetes.io/security-groups: ${alb_security_group_id}
+    alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
     # ALB access logs
     alb.ingress.kubernetes.io/load-balancer-attributes: access_logs.s3.enabled=true,access_logs.s3.bucket=${alb_logs_bucket},access_logs.s3.prefix=ui-alb
 %{ endif }
